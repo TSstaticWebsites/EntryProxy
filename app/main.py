@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from stem.control import Controller
 from .models import OnionRequest, TorResponse
+import asyncio
 import base64
 
 app = FastAPI()
@@ -22,35 +24,50 @@ async def root():
 async def relay_package(request: OnionRequest):
     """
     Accept an onion package and forward it to the Tor network.
-    For testing purposes, we'll simulate a successful response.
-    In a real implementation, this would:
-    1. Verify the package structure
-    2. Forward to the entry node
-    3. Return the response from the exit node
+    The package is expected to be pre-encrypted from the browser.
     """
     try:
-        # Verify package structure
+        # Validate package structure
         if not request.packages or len(request.packages) != 3:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid package structure. Must contain exactly 3 layers."
             )
 
-        # For testing, return a mock HTML response
-        mock_html = """
-        <html>
-            <head><title>Test Onion Site</title></head>
-            <body>
-                <h1>Welcome to the Test Onion Site</h1>
-                <p>This is a mock response from the Tor network.</p>
-            </body>
-        </html>
-        """
+        # Connect to Tor controller
+        controller = Controller.from_port()
+        await asyncio.to_thread(controller.authenticate)
 
-        return TorResponse(
-            content=mock_html,
-            status=200
-        )
+        try:
+            # Create circuit using the specified entry node
+            circuit_id = await asyncio.to_thread(
+                controller.new_circuit,
+                [request.entry_node],
+                await_build=True
+            )
+
+            # Attach stream to circuit
+            await asyncio.to_thread(
+                controller.attach_stream,
+                circuit_id,
+                request.packages[-1].next_hop
+            )
+
+            # Forward the pre-encrypted package
+            response = await asyncio.to_thread(
+                controller.send_tor_request,
+                circuit_id,
+                base64.b64decode(request.packages[-1].data)
+            )
+
+            return TorResponse(
+                content=response.decode(),
+                status=200
+            )
+        finally:
+            # Clean up
+            await asyncio.to_thread(controller.close)
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
