@@ -1,0 +1,12 @@
+[tool.poetry]
+name = "entry-proxy"
+version = "0.1.0"
+description = "Proxy server for forwarding pre-built Tor packages"
+authors = ["TSstaticWebsites"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.108.0"
+uvicorn = "^0.25.0"
+python-multipart = "^0.0.6"
+stem = "^1.8.2"
