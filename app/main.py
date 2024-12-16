@@ -1,9 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from stem.control import Controller
+import stem.process
 from .models import OnionRequest, TorResponse
 import asyncio
 import base64
+import socket
+import socks
 
 app = FastAPI()
 
@@ -46,24 +49,38 @@ async def relay_package(request: OnionRequest):
                 await_build=True
             )
 
-            # Attach stream to circuit
-            await asyncio.to_thread(
-                controller.attach_stream,
-                circuit_id,
-                request.packages[-1].next_hop
-            )
+            # Configure SOCKS proxy
+            socks.setdefaultproxy(socks.PROXY_TYPE_SOCKS5, "127.0.0.1", 9050)
+            socket.socket = socks.socksocket
 
-            # Forward the pre-encrypted package
-            response = await asyncio.to_thread(
-                controller.send_tor_request,
-                circuit_id,
-                base64.b64decode(request.packages[-1].data)
-            )
+            # Create a socket connection through Tor
+            s = socket.socket()
+            s.settimeout(30)  # 30 second timeout
 
-            return TorResponse(
-                content=response.decode(),
-                status=200
-            )
+            try:
+                # Connect to the onion service
+                s.connect((request.packages[-1].next_hop, 80))
+
+                # Send the HTTP request with the encrypted data
+                s.send(base64.b64decode(request.packages[-1].data))
+
+                # Receive the response
+                response = b""
+                while True:
+                    try:
+                        chunk = s.recv(4096)
+                        if not chunk:
+                            break
+                        response += chunk
+                    except socket.timeout:
+                        break
+
+                return TorResponse(
+                    content=response.decode(),
+                    status=200
+                )
+            finally:
+                s.close()
         finally:
             # Clean up
             await asyncio.to_thread(controller.close)
