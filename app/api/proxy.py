@@ -4,8 +4,8 @@ import asyncio
 
 router = APIRouter()
 
-@router.post("/forward")
-async def forward_package(request: Request):
+@router.post("/relay")
+async def relay_package(request: Request):
     try:
         # Read raw bytes from request
         package = await request.body()
