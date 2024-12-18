@@ -1,11 +1,23 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from stem.control import Controller
 import asyncio
 
 router = APIRouter()
 
-@router.post("/forward")
-async def forward_package(request: Request):
+@router.options("/relay")
+async def options_relay():
+    return Response(
+        content="",
+        headers={
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
+            "Access-Control-Allow-Origin": "https://onion-browser-proxy-inzpir1h.devinapps.com",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+@router.post("/relay")
+async def relay_package(request: Request):
     try:
         # Read raw bytes from request
         package = await request.body()
