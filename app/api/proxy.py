@@ -4,6 +4,13 @@ import asyncio
 
 router = APIRouter()
 
+@router.options("/relay")
+async def options_relay():
+    return {
+        "allow_methods": ["POST"],
+        "allow_headers": ["Content-Type"],
+    }
+
 @router.post("/relay")
 async def relay_package(request: Request):
     try:
